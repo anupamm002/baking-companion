@@ -32,3 +32,10 @@ video { width:100%; border-radius:12px; background:#000; max-height:40vh; }
 .title { flex:1; }
 .fin { color:var(--muted); font-size:.8rem; }
 .tap { margin-left:6px; font-size:.8rem; padding:6px 10px; }
+.navlink { color:var(--accent); text-decoration:none; font-size:.95rem; }
+.muted { color:var(--muted); font-size:.9rem; }
+.view label { display:block; margin:12px 0 4px; color:var(--muted); font-size:.9rem; }
+.view input, .view textarea { width:100%; background:var(--card); color:var(--fg);
+  border:1px solid #0004; border-radius:8px; padding:10px; font-size:1rem; margin-top:4px; }
+#yamlEditor { font-family:ui-monospace, monospace; font-size:.82rem; }
+#aiInstr { flex:1; }

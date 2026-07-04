@@ -141,6 +141,47 @@ def _prepare(source):
     return "pasted text", src, None, None      # treat unknown as raw text
 
 
+def build_import_messages(url_text=None, user_text=None, images=None):
+    system = [{"type": "text", "text": SCHEMA_GUIDE,
+               "cache_control": {"type": "ephemeral"}}]
+    content = [{"type": "text", "text": "Convert the following into recipe YAML. "
+                "Combine ALL provided sources (URL content, notes, photos) into ONE "
+                "recipe."}]
+    if url_text:
+        content.append({"type": "text", "text": "SOURCE URL CONTENT:\n" + url_text[:20000]})
+    if user_text:
+        content.append({"type": "text", "text": "USER NOTES:\n" + user_text[:8000]})
+    for img in images or []:
+        content.append({"type": "image_url",
+                        "image_url": {"url": f"data:{img['mime']};base64,{img['data']}"}})
+    return [{"role": "system", "content": system},
+            {"role": "user", "content": content}]
+
+
+def import_from_sources(url=None, text=None, images=None, model=None):
+    """Combine a URL, free text, and photos into a single validated recipe (unsaved)."""
+    url_text = fetch_text(url) if url else None
+    raw = llm.chat(build_import_messages(url_text, text, images), model=model)
+    yaml_text = extract_yaml(raw)
+    recipe = parse_and_validate(yaml_text)           # raises on invalid
+    questions = [ln for ln in raw.splitlines() if ln.strip().startswith("# -")]
+    return {"yaml": yaml_text, "recipe": recipe, "raw": raw, "questions": questions}
+
+
+def ai_edit(yaml_text, instruction, model=None):
+    """Apply a natural-language edit to a recipe YAML, returning validated YAML."""
+    system = [{"type": "text", "text": SCHEMA_GUIDE,
+               "cache_control": {"type": "ephemeral"}}]
+    user = ("Here is the current recipe YAML:\n```yaml\n" + yaml_text + "\n```\n\n"
+            "Apply this change and return ONLY the full updated recipe as one ```yaml "
+            "block:\n" + instruction)
+    raw = llm.chat([{"role": "system", "content": system},
+                    {"role": "user", "content": user}], model=model)
+    new_yaml = extract_yaml(raw)
+    recipe = parse_and_validate(new_yaml)
+    return {"yaml": new_yaml, "recipe": recipe, "raw": raw}
+
+
 def import_recipe(source, out_dir="recipes", model=None, dry_run=False):
     desc, text, img, mime = _prepare(source)
     messages = build_messages(desc, text, img, mime)

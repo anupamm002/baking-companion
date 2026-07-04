@@ -18,12 +18,14 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
+from . import importer, library, llm
 from .engine import Engine
 from .router import Router
 from .scheduler import compute_schedule
 from .store import Store
 
 WEBDIR = Path(__file__).resolve().parent / "webui"
+BUNDLED_RECIPES = Path(__file__).resolve().parent.parent / "recipes"
 
 
 def state_payload(store, engine, bake_id):
@@ -86,6 +88,20 @@ class Handler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         if parsed.path == "/":
             return self._serve_file(WEBDIR / "index.html", "text/html")
+        if parsed.path == "/recipes":
+            return self._serve_file(WEBDIR / "manage.html", "text/html")
+        if parsed.path == "/api/recipes":
+            return self._send(library.list_recipes(self.store.home))
+        if parsed.path.startswith("/api/recipes/"):
+            rid = parsed.path[len("/api/recipes/"):]
+            y = library.get_yaml(self.store.home, rid)
+            if y is None:
+                return self._send({"error": "not found"}, 404)
+            try:
+                rec = importer.parse_and_validate(y).to_dict()
+            except Exception:
+                rec = None
+            return self._send({"id": rid, "yaml": y, "recipe": rec})
         if parsed.path.startswith("/static/"):
             name = parsed.path[len("/static/"):]
             ctype = ("text/javascript" if name.endswith(".js")
@@ -112,8 +128,46 @@ class Handler(BaseHTTPRequestHandler):
             return self._serve_file(fpath, ctype)
         self._send({"error": "not found"}, 404)
 
+    def do_DELETE(self):
+        parsed = urlparse(self.path)
+        if parsed.path.startswith("/api/recipes/"):
+            rid = parsed.path[len("/api/recipes/"):]
+            return self._send({"ok": library.delete(self.store.home, rid)})
+        self._send({"error": "not found"}, 404)
+
     def do_POST(self):
         parsed = urlparse(self.path)
+        if parsed.path == "/api/recipes/import":
+            if not llm.available():
+                return self._send({"ok": False,
+                                   "error": "No OPENROUTER_API_KEY set on the server."})
+            b = self._read_json()
+            try:
+                res = importer.import_from_sources(
+                    url=b.get("url") or None, text=b.get("text") or None,
+                    images=b.get("images") or [])
+                return self._send({"ok": True, "yaml": res["yaml"],
+                                   "recipe": res["recipe"].to_dict(),
+                                   "questions": res["questions"]})
+            except Exception as e:
+                return self._send({"ok": False, "error": str(e)})
+        if parsed.path == "/api/recipes/ai_edit":
+            if not llm.available():
+                return self._send({"ok": False, "error": "No OPENROUTER_API_KEY set."})
+            b = self._read_json()
+            try:
+                res = importer.ai_edit(b["yaml"], b["instruction"])
+                return self._send({"ok": True, "yaml": res["yaml"],
+                                   "recipe": res["recipe"].to_dict()})
+            except Exception as e:
+                return self._send({"ok": False, "error": str(e)})
+        if parsed.path == "/api/recipes/save":
+            b = self._read_json()
+            try:
+                r = library.save_yaml(self.store.home, b["yaml"])
+                return self._send({"ok": True, "id": r.id, "name": r.name})
+            except Exception as e:
+                return self._send({"ok": False, "error": str(e)})
         if parsed.path == "/api/ask":
             text = self._read_json().get("text", "")
             resp = self.router.handle(text, self.bake_id)
@@ -150,6 +204,7 @@ class Handler(BaseHTTPRequestHandler):
 def serve(bake_id=None, host="0.0.0.0", port=8765, store=None):
     store = store or Store()
     engine = Engine(store)
+    library.seed(store.home, BUNDLED_RECIPES)
     if bake_id is None:
         ptr = store.home / "current_bake.txt"
         if not ptr.exists():
