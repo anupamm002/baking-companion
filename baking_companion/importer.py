@@ -117,8 +117,19 @@ def build_messages(source_desc, source_text=None, image_b64=None, image_mime=Non
 
 
 def extract_yaml(text):
-    m = re.search(r"```(?:yaml)?\s*(.*?)```", text, re.S)
-    return (m.group(1) if m else text).strip()
+    """Pull YAML out of an LLM reply, tolerating fences with or without a closer."""
+    text = text.strip()
+    fence = re.search(r"```[ \t]*[A-Za-z0-9]*[ \t]*\r?\n", text)
+    if fence:
+        body = text[fence.end():]
+        close = body.find("```")
+        if close != -1:
+            body = body[:close]
+        return body.strip()
+    # no proper fence: strip any stray leading ```lang / trailing ```
+    text = re.sub(r"^```[A-Za-z0-9]*[ \t]*\r?\n?", "", text)
+    text = re.sub(r"\r?\n?```\s*$", "", text)
+    return text.strip()
 
 
 def parse_and_validate(yaml_text) -> Recipe:
