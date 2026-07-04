@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <title>Baking Companion</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header>
+    <h1 id="bakeName">Baking Companion</h1>
+    <div id="eta" class="eta"></div>
+  </header>
+
+  <div id="assistant" class="assistant">Tap the mic and ask me something.</div>
+  <div id="heard" class="heard"></div>
+
+  <div class="controls">
+    <button id="micBtn" class="mic">🎙️ Start listening</button>
+    <button id="camBtn" class="cam">📷 Camera</button>
+    <button id="snapBtn" class="snap" hidden>Capture</button>
+  </div>
+
+  <div id="camWrap" class="camwrap" hidden>
+    <video id="video" autoplay playsinline muted></video>
+    <canvas id="canvas" hidden></canvas>
+  </div>
+
+  <section id="alerts" class="alerts"></section>
+
+  <ol id="steps" class="steps"></ol>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

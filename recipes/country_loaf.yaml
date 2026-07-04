@@ -1,0 +1,194 @@
+# Reference recipe — Sourdough Country Loaf
+# Doubles as the first schema test fixture. Authored as YAML; at bake time an INSTANCE
+# is snapshotted from this into SQLite (see docs/02-graph-model.md).
+#
+# Demonstrates: levain sub-recipe with back-scheduling, AND-joins (mix needs
+# autolyse+levain; bake needs oven+dough), a parallel branch (preheat ∥ final prep),
+# absolute ingredient quantities (first-class) + optional baker's-% scaling,
+# per-node durations, edge scheduling constraints, readiness hints, capture prompts.
+
+recipe:
+  id: country_loaf
+  version: 3
+  name: Sourdough Country Loaf
+  yield: "1 loaf (~900 g)"
+  equipment: ["1 kg oval banneton", "Dutch oven", "lame/razor", "kitchen scale"]
+
+  # OPTIONAL — quantities below are canonical; this just enables ratio-preserving
+  # re-anchoring for the bread case. Omit for non-bread recipes.
+  scaling: { mode: bakers_percent, anchor: flour }   # total flour = 100%
+
+  nodes:
+    - id: feed_levain
+      type: subrecipe
+      title: Feed the levain
+      description: Mix starter, flour and water; let it ripen until peaked.
+      ingredients:
+        - { name: mature starter, qty: 20, unit: g, role: leaven }
+        - { name: bread flour,    qty: 50, unit: g, role: flour }
+        - { name: water (28 °C),  qty: 50, unit: g, role: water }
+      duration: { min: 6h, typical: 7h, max: 9h }
+      readiness_hint: "doubled, domed, bubbly; passes the float test"
+      capture: { prompt_photo: true, tags: [levain, ripe] }
+      says: "Feed the levain — 20 g starter, 50 g flour, 50 g water. I'll track ripeness."
+
+    - id: autolyse
+      type: mix
+      title: Autolyse
+      description: Combine flour and most of the water to a shaggy mass; rest, no salt yet.
+      ingredients:
+        - { name: bread flour,      qty: 450, unit: g, role: flour }
+        - { name: whole wheat flour, qty: 50, unit: g, role: flour }
+        - { name: water (32 °C),    qty: 350, unit: g, role: water }   # 25 g reserved
+      duration: { min: 30m, typical: 45m, max: 1h }
+      says: "Autolyse: mix the flours with 350 g water until no dry bits. Rest."
+
+    - id: mix
+      type: mix
+      title: Add levain + salt
+      description: Add ripe levain, salt and reserved water; mix/pinch until incorporated.
+      ingredients:
+        - { name: ripe levain,   qty: 100, unit: g, role: leaven }   # from feed_levain
+        - { name: salt,          qty: 10,  unit: g, role: salt }
+        - { name: water (reserve), qty: 25, unit: g, role: water }
+      duration: { min: 8m, typical: 12m, max: 20m }
+      capture: { prompt_photo: true, tags: [dough, mixed] }
+      says: "Add the levain, salt and reserved water. Pinch and fold until smooth."
+
+    - id: bulk_fold_1
+      type: action
+      title: Coil fold 1 of 4
+      description: First set of coil folds, then rest.
+      duration: { min: 20m, typical: 30m, max: 45m }
+      readiness_hint: "dough loosening, some bubbles"
+      references:
+        - { type: youtube, url: "https://youtu.be/coil-fold-demo", t_start: "1:05",
+            caption: "Instructor's coil fold technique" }
+      capture: { prompt_photo: true, tags: [bulk, fold-1] }
+      says: "Fold 1 — coil fold, then rest about 30 minutes."
+
+    - id: bulk_fold_2
+      type: action
+      title: Coil fold 2 of 4
+      duration: { min: 20m, typical: 30m, max: 45m }
+      capture: { prompt_photo: true, tags: [bulk, fold-2] }
+      says: "Fold 2 — coil fold, then rest."
+
+    - id: bulk_fold_3
+      type: action
+      title: Coil fold 3 of 4
+      duration: { min: 20m, typical: 30m, max: 45m }
+      capture: { prompt_photo: true, tags: [bulk, fold-3] }
+      says: "Fold 3 — coil fold, then rest."
+
+    - id: bulk_fold_4
+      type: action
+      title: Coil fold 4 of 4
+      duration: { min: 20m, typical: 30m, max: 45m }
+      capture: { prompt_photo: true, tags: [bulk, fold-4] }
+      says: "Fold 4 — the last one. Then let bulk finish."
+
+    - id: bulk_finish
+      type: wait
+      title: Finish bulk fermentation
+      description: Rest undisturbed until the dough is puffy and jiggly.
+      duration: { min: 1h, typical: 1h30m, max: 3h }
+      readiness_hint: "~50% risen, domed, jiggly, bubbles at edges"
+      capture: { prompt_photo: true, tags: [bulk, end] }
+      says: "Let bulk finish. I'll nudge you at about 90 minutes — but judge by the dough."
+
+    - id: preshape
+      type: action
+      title: Pre-shape + bench rest
+      description: Turn out, pre-shape into a round; bench rest uncovered.
+      duration: { min: 20m, typical: 25m, max: 40m }
+      says: "Pre-shape into a loose round. Bench rest ~25 minutes."
+
+    - id: final_shape
+      type: action
+      title: Final shape into banneton
+      description: Shape with tension; seam-up into the floured banneton.
+      duration: { min: 5m, typical: 8m, max: 15m }
+      capture: { prompt_photo: true, tags: [shaped, banneton] }
+      says: "Final shape, seam up into the banneton."
+
+    - id: cold_retard
+      type: wait
+      title: Cold retard (fridge)
+      description: Cover and refrigerate overnight to develop flavour and firm up.
+      duration: { min: 12h, typical: 14h, max: 16h }
+      capture: { prompt_photo: false }
+      says: "Into the fridge, covered. Overnight cold proof."
+
+    # ---- parallel branch: oven prep runs alongside the tail of the retard ----
+    - id: preheat
+      type: bake
+      title: Preheat oven + Dutch oven
+      description: Preheat with the Dutch oven inside so it's screaming hot.
+      temperature: 250C
+      duration: { min: 45m, typical: 50m, max: 1h }
+      says: "Start the oven at 250 with the Dutch oven inside."
+
+    - id: pull_and_score
+      type: action
+      title: Turn out + score
+      description: Turn the cold dough onto parchment, dust, and score with the lame.
+      duration: { min: 5m, typical: 8m, max: 12m }
+      references:
+        - { type: youtube, url: "https://youtu.be/scoring-basics", t_start: "0:30",
+            caption: "Simple scoring patterns" }
+      capture: { prompt_photo: true, tags: [scored, pre-bake] }
+      says: "Turn out onto parchment and score. Bake straight from the fridge."
+
+    - id: bake_lid_on
+      type: bake
+      title: Bake — lid on
+      description: Lower dough into the hot Dutch oven, lid on, for steam.
+      temperature: 250C
+      duration: { min: 20m, typical: 20m, max: 22m }
+      says: "Lid on, 250, 20 minutes."
+
+    - id: bake_lid_off
+      type: bake
+      title: Bake — lid off
+      description: Remove lid, drop temp, bake to a deep crust.
+      temperature: 230C
+      duration: { min: 20m, typical: 22m, max: 28m }
+      readiness_hint: "deep brown, hollow when tapped, internal ~99 °C"
+      capture: { prompt_photo: true, tags: [baked, crust] }
+      says: "Lid off, 230, until deep brown."
+
+    - id: cool
+      type: wait
+      title: Cool on rack
+      description: Cool completely before cutting — the crumb is still setting.
+      duration: { min: 1h, typical: 1h30m, max: 2h }
+      capture: { prompt_photo: true, tags: [crumb, final] }
+      says: "Onto a rack. Don't cut for at least an hour — I mean it."
+
+  edges:
+    - { from: START,        to: feed_levain }
+    - { from: START,        to: autolyse }
+    # AND-join: mix needs BOTH a ripe levain and a rested autolyse
+    - { from: feed_levain,  to: mix }
+    - { from: autolyse,     to: mix }
+    - { from: mix,          to: bulk_fold_1 }
+    - { from: bulk_fold_1,  to: bulk_fold_2 }
+    - { from: bulk_fold_2,  to: bulk_fold_3 }
+    - { from: bulk_fold_3,  to: bulk_fold_4 }
+    - { from: bulk_fold_4,  to: bulk_finish }
+    - { from: bulk_finish,  to: preshape }
+    - { from: preshape,     to: final_shape }
+    - { from: final_shape,  to: cold_retard }
+    # parallel branch: preheat is available from the start; the constraint (on its edge
+    # INTO the bake) makes the scheduler place it late — "start ~50 min before bake"
+    - { from: START,        to: preheat }
+    - { from: cold_retard,  to: pull_and_score }
+    # AND-join: bake needs a hot oven AND a scored loaf. Scheduling subject = the FROM node.
+    - { from: preheat,        to: bake_lid_on,
+        constraint: { kind: finish_by, target: bake_lid_on } }
+    - { from: pull_and_score, to: bake_lid_on,
+        constraint: { kind: start_before, target: bake_lid_on, lead: 10m } }
+    - { from: bake_lid_on,  to: bake_lid_off }
+    - { from: bake_lid_off, to: cool }
+    - { from: cool,         to: END }

@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.venv/
+venv/
+# runtime data (bakes, media, sqlite) live in ~/.baking_companion by default
+data/
+*.db
+# local / stray files (not part of the app)
+.claude/
+*:Zone.Identifier
+temp.txt
+old_phone_specs.jpeg
