@@ -17,8 +17,10 @@ async function loadMedia() {
   const g = $("gallery");
   if (!items.length) { g.innerHTML = ""; return; }
   g.innerHTML = "<h2>Captures</h2>" + items.slice().reverse().map((m) =>
-    `<a href="${m.url}" target="_blank"><img src="${m.url}" loading="lazy"`
-    + ` alt="${m.node || ""}" title="${m.node || ""} · ${m.ts || ""}"></a>`).join("");
+    m.kind === "video"
+      ? `<video src="${m.url}" class="thumb" muted playsinline controls preload="metadata"></video>`
+      : `<a href="${m.url}" target="_blank"><img src="${m.url}" loading="lazy"`
+        + ` alt="${m.node || ""}" title="${m.node || ""} · ${m.ts || ""}"></a>`).join("");
 }
 
 // ---- state rendering ----
@@ -27,7 +29,15 @@ async function refresh() {
   render(s);
   loadMedia();
 }
+
 function render(s) {
+  if (!s.bake) {
+    $("bakeName").textContent = "No active bake";
+    $("eta").textContent = "";
+    $("assistant").textContent = "No bake in progress. Open 🍞 Bakes to start one.";
+    $("steps").innerHTML = ""; $("alerts").innerHTML = ""; frontier = [];
+    return;
+  }
   $("bakeName").textContent = s.bake.name;
   $("eta").textContent = s.eta ? "done ~" + s.eta : "";
   frontier = s.frontier || [];
@@ -37,11 +47,17 @@ function render(s) {
   for (const n of s.nodes) {
     const li = document.createElement("li");
     li.className = n.status;
-    const act = n.status === "ready" ? `<button class="tap" data-cmd="begin" data-node="${n.id}">start</button>`
-      : n.status === "active" ? `<button class="tap" data-cmd="done" data-node="${n.id}">done</button>` : "";
+    let btns = "";
+    if (n.status === "done" || n.status === "skipped") {
+      btns = `<button class="tap" data-cmd="reopen" data-node="${n.id}">undo</button>`;
+    } else {
+      if (n.status !== "active")
+        btns += `<button class="tap" data-cmd="begin" data-node="${n.id}">start</button>`;
+      btns += `<button class="tap" data-cmd="done" data-node="${n.id}">done</button>`;
+    }
     li.innerHTML = `<span class="icon">${ICON[n.status] || "?"}</span>`
       + `<span class="title">${n.title || n.id}</span>`
-      + (n.finish ? `<span class="fin">~${n.finish}</span>` : "") + act;
+      + (n.finish ? `<span class="fin">~${n.finish}</span>` : "") + btns;
     ol.appendChild(li);
   }
   ol.querySelectorAll("button[data-cmd]").forEach((b) =>
@@ -54,7 +70,7 @@ async function command(cmd, node) {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ cmd, node }),
   })).json();
-  render(s);
+  if (s.bake !== undefined) render(s);
 }
 async function ask(text) {
   $("heard").textContent = "“" + text + "”";
@@ -65,7 +81,7 @@ async function ask(text) {
   $("assistant").textContent = r.text;
   speak(r.text);
   if (r.state) render(r.state);
-  if (r.action === "capture") { openCamera(); }
+  if (r.action === "capture") openCamera();
 }
 
 // ---- speech input (Web Speech, continuous, auto-restart) ----
@@ -91,18 +107,23 @@ $("micBtn").onclick = () => {
   else recog.stop();
 };
 
-// ---- camera / capture ----
-let stream = null;
+// ---- camera / photo / video ----
+let stream = null, recorder = null, chunks = [];
 async function openCamera() {
-  $("camWrap").hidden = false; $("snapBtn").hidden = false;
+  $("camWrap").hidden = false;
+  $("snapBtn").hidden = false;
+  $("recBtn").hidden = false;
   if (!stream) {
     try {
-      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "environment", width: { ideal: 1920 } }, audio: true,
+      });
       $("video").srcObject = stream;
     } catch (e) { $("assistant").textContent = "Camera error: " + e; }
   }
 }
 $("camBtn").onclick = openCamera;
+
 $("snapBtn").onclick = async () => {
   const v = $("video"), c = $("canvas");
   c.width = v.videoWidth; c.height = v.videoHeight;
@@ -113,8 +134,35 @@ $("snapBtn").onclick = async () => {
     method: "POST", headers: { "Content-Type": "image/jpeg" }, body: blob,
   });
   $("assistant").textContent = "Captured a photo for " + (node || "the bake") + ".";
-  speak("Got it.");
-  loadMedia();
+  speak("Got it."); loadMedia();
+};
+
+function pickMime() {
+  for (const m of ["video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm", "video/mp4"])
+    if (window.MediaRecorder && MediaRecorder.isTypeSupported(m)) return m;
+  return "";
+}
+$("recBtn").onclick = async () => {
+  if (!stream) await openCamera();
+  if (recorder && recorder.state === "recording") { recorder.stop(); return; }
+  chunks = [];
+  recorder = new MediaRecorder(stream, pickMime() ? { mimeType: pickMime() } : undefined);
+  recorder.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+  recorder.onstop = async () => {
+    const type = recorder.mimeType || "video/webm";
+    const blob = new Blob(chunks, { type });
+    const node = frontier[0] || "";
+    $("assistant").textContent = "Uploading video…";
+    await fetch("/api/capture?node=" + encodeURIComponent(node), {
+      method: "POST", headers: { "Content-Type": type }, body: blob,
+    });
+    $("assistant").textContent = "Saved a video for " + (node || "the bake") + ".";
+    $("recBtn").textContent = "🎥 Record"; $("recBtn").classList.remove("on");
+    loadMedia();
+  };
+  recorder.start();
+  $("recBtn").textContent = "⏹ Stop recording"; $("recBtn").classList.add("on");
+  speak("Recording.");
 };
 
 refresh();

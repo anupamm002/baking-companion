@@ -19,8 +19,8 @@ video { width:100%; border-radius:12px; background:#000; max-height:40vh; }
 .alerts { color:var(--active); font-size:.9rem; margin:6px 0; }
 .gallery { display:flex; flex-wrap:wrap; gap:6px; margin:8px 0; }
 .gallery h2 { width:100%; font-size:.9rem; margin:6px 0 2px; color:var(--muted); }
-.gallery img { width:88px; height:88px; object-fit:cover; border-radius:8px;
-               border:1px solid #0003; }
+.gallery img, .gallery .thumb { width:88px; height:88px; object-fit:cover;
+               border-radius:8px; border:1px solid #0003; background:#000; }
 .steps { list-style:none; padding:0; margin:8px 0; }
 .steps li { background:var(--card); border-radius:10px; padding:10px 12px;
             margin:6px 0; display:flex; align-items:center; gap:10px;

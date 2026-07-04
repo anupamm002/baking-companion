@@ -206,7 +206,8 @@ class App:
 
     def cmd_serve(self, a):
         from .web import serve
-        bake = a.bake or (self.current() if self._current.exists() else None)
+        bake = a.bake or (self._current.read_text().strip()
+                          if self._current.exists() else None)
         serve(bake_id=bake, host=a.host, port=a.port, store=self.store)
 
     def cmd_ask(self, a):

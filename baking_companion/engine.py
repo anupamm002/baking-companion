@@ -92,6 +92,13 @@ class Engine:
         bake = self.store.get_bake(bake_id)
         self._recompute_ready(bake_id, self.recipe_of(bake))
 
+    def reopen(self, bake_id, node_id):
+        """Undo: return a done/skipped node to ready/blocked (recomputed from preds)."""
+        self.store.set_node_status(bake_id, node_id, "ready", completed_at=None)
+        bake = self.store.get_bake(bake_id)
+        self._recompute_ready(bake_id, self.recipe_of(bake))
+        self.store.add_event(bake_id, node_id, "reopen", {})
+
     def skip(self, bake_id, node_id, reason=None):
         self.store.set_node_status(bake_id, node_id, "skipped",
                                    completed_at=now_iso())

@@ -29,7 +29,10 @@ BUNDLED_RECIPES = Path(__file__).resolve().parent.parent / "recipes"
 
 
 def state_payload(store, engine, bake_id):
-    bake = store.get_bake(bake_id)
+    bake = store.get_bake(bake_id) if bake_id else None
+    if bake is None:
+        return {"bake": None, "nodes": [], "frontier": [], "eta": None,
+                "suggestions": []}
     recipe = engine.recipe_of(bake)
     states = store.get_node_states(bake_id)
     smap = {s["node_id"]: dict(s) for s in states}
@@ -57,11 +60,38 @@ def state_payload(store, engine, bake_id):
     }
 
 
+def bakes_list(store):
+    cur = current_bake_id(store)
+    out = []
+    for b in store.list_bakes():
+        states = store.get_node_states(b["id"])
+        total = len(states)
+        done = sum(1 for s in states if s["status"] in ("done", "skipped"))
+        out.append({"id": b["id"], "name": b["name"], "recipe": b["recipe_id"],
+                    "status": b["status"], "done": done, "total": total,
+                    "current": b["id"] == cur})
+    return out
+
+
+def current_bake_id(store):
+    ptr = store.home / "current_bake.txt"
+    if ptr.exists():
+        bid = ptr.read_text().strip()
+        if store.get_bake(bid):
+            return bid
+    return None
+
+
 class Handler(BaseHTTPRequestHandler):
     store: Store = None
     engine: Engine = None
     router: Router = None
-    bake_id: str = None
+
+    def _bake_id(self):
+        return current_bake_id(self.store)
+
+    def _set_current(self, bid):
+        (self.store.home / "current_bake.txt").write_text(bid)
 
     def log_message(self, *a):
         pass
@@ -90,6 +120,10 @@ class Handler(BaseHTTPRequestHandler):
             return self._serve_file(WEBDIR / "index.html", "text/html")
         if parsed.path == "/recipes":
             return self._serve_file(WEBDIR / "manage.html", "text/html")
+        if parsed.path == "/bakes":
+            return self._serve_file(WEBDIR / "bakes.html", "text/html")
+        if parsed.path == "/api/bakes":
+            return self._send(bakes_list(self.store))
         if parsed.path == "/api/recipes":
             return self._send(library.list_recipes(self.store.home))
         if parsed.path.startswith("/api/recipes/"):
@@ -108,11 +142,14 @@ class Handler(BaseHTTPRequestHandler):
                      else "text/css" if name.endswith(".css") else "text/plain")
             return self._serve_file(WEBDIR / name, ctype)
         if parsed.path == "/api/state":
-            return self._send(state_payload(self.store, self.engine, self.bake_id))
+            return self._send(state_payload(self.store, self.engine, self._bake_id()))
         if parsed.path == "/api/media":
-            items = self.store.get_media(bake_id=self.bake_id)
+            bid = self._bake_id()
+            if not bid:
+                return self._send([])
+            items = self.store.get_media(bake_id=bid)
             out = [{"node": m["node_id"],
-                    "url": f"/media/{self.bake_id}/{Path(m['path']).name}",
+                    "url": f"/media/{bid}/{Path(m['path']).name}",
                     "ts": m["ts"], "kind": m["kind"], "caption": m["caption"],
                     "tags": json.loads(m["tags"] or "[]")} for m in items]
             return self._send(out)
@@ -168,35 +205,64 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send({"ok": True, "id": r.id, "name": r.name})
             except Exception as e:
                 return self._send({"ok": False, "error": str(e)})
+        if parsed.path == "/api/bakes":                       # start a new bake instance
+            b = self._read_json()
+            y = library.get_yaml(self.store.home, b.get("recipe_id"))
+            if not y:
+                return self._send({"ok": False, "error": "recipe not found"})
+            try:
+                recipe = importer.parse_and_validate(y)
+                bid = self.engine.create_bake(recipe, name=b.get("name") or None)
+                self._set_current(bid)
+                return self._send({"ok": True, "id": bid})
+            except Exception as e:
+                return self._send({"ok": False, "error": str(e)})
+        if parsed.path == "/api/bakes/select":
+            bid = self._read_json().get("bake_id")
+            if not self.store.get_bake(bid):
+                return self._send({"ok": False, "error": "no such bake"})
+            self._set_current(bid)
+            return self._send({"ok": True})
         if parsed.path == "/api/ask":
+            bid = self._bake_id()
+            if not bid:
+                return self._send({"tier": 0, "text": "No active bake — start one first."})
             text = self._read_json().get("text", "")
-            resp = self.router.handle(text, self.bake_id)
-            resp["state"] = state_payload(self.store, self.engine, self.bake_id)
+            resp = self.router.handle(text, bid)
+            resp["state"] = state_payload(self.store, self.engine, bid)
             return self._send(resp)
         if parsed.path == "/api/command":
+            bid = self._bake_id()
+            if not bid:
+                return self._send({"error": "no active bake"}, 400)
             body = self._read_json()
             cmd, node = body.get("cmd"), body.get("node")
             if cmd == "begin":
-                self.engine.begin(self.bake_id, node)
+                self.engine.begin(bid, node)
             elif cmd == "done":
-                self.engine.done(self.bake_id, node)
+                self.engine.done(bid, node)
             elif cmd == "skip":
-                self.engine.skip(self.bake_id, node, reason=body.get("reason"))
+                self.engine.skip(bid, node, reason=body.get("reason"))
+            elif cmd == "reopen":
+                self.engine.reopen(bid, node)
             else:
                 return self._send({"error": f"unknown cmd {cmd}"}, 400)
-            return self._send(state_payload(self.store, self.engine, self.bake_id))
+            return self._send(state_payload(self.store, self.engine, bid))
         if parsed.path == "/api/capture":
+            bid = self._bake_id()
+            if not bid:
+                return self._send({"ok": False, "error": "no active bake"}, 400)
             qs = parse_qs(parsed.query)
             node = (qs.get("node") or [None])[0]
-            tags = (qs.get("tags") or [""])[0]
-            tags = [t for t in tags.split(",") if t]
+            tags = [t for t in (qs.get("tags") or [""])[0].split(",") if t]
             n = int(self.headers.get("Content-Length", 0))
             data = self.rfile.read(n) if n else b""
-            suffix = ".jpg" if "image" in self.headers.get("Content-Type", "") else ".webm"
+            ct = self.headers.get("Content-Type", "")
+            suffix = ".jpg" if "image" in ct else ".mp4" if "mp4" in ct else ".webm"
             with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tf:
                 tf.write(data)
                 tmp = tf.name
-            dest = self.engine.capture(self.bake_id, node, tmp, tags=tags or ["voice"])
+            dest = self.engine.capture(bid, node, tmp, tags=tags or ["capture"])
             return self._send({"ok": True, "path": str(dest)})
         self._send({"error": "not found"}, 404)
 
@@ -205,19 +271,13 @@ def serve(bake_id=None, host="0.0.0.0", port=8765, store=None):
     store = store or Store()
     engine = Engine(store)
     library.seed(store.home, BUNDLED_RECIPES)
-    if bake_id is None:
-        ptr = store.home / "current_bake.txt"
-        if not ptr.exists():
-            raise SystemExit("No current bake. `bc start ...` or pass --bake.")
-        bake_id = ptr.read_text().strip()
-    if not store.get_bake(bake_id):
-        raise SystemExit(f"No such bake: {bake_id}")
+    if bake_id and store.get_bake(bake_id):
+        (store.home / "current_bake.txt").write_text(bake_id)
     Handler.store = store
     Handler.engine = engine
     Handler.router = Router(store, engine)
-    Handler.bake_id = bake_id
     httpd = ThreadingHTTPServer((host, port), Handler)
-    print(f"Baking companion serving {bake_id} on http://{host}:{port}")
+    print(f"Baking companion serving on http://{host}:{port}")
     print("Open that URL in Chrome on the phone (localhost is a secure context).")
     try:
         httpd.serve_forever()
