@@ -34,7 +34,7 @@ def anchor_total(recipe):
 
 def scale(recipe, factor):
     """Return a deep copy with every ingredient quantity multiplied by factor."""
-    r = recipe.model_copy(deep=True)
+    r = recipe.copy_deep()
     for n in r.nodes:
         for ing in n.ingredients:
             if ing.qty is not None:

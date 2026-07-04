@@ -123,9 +123,7 @@ def extract_yaml(text):
 
 def parse_and_validate(yaml_text) -> Recipe:
     data = yaml.safe_load(yaml_text)
-    if isinstance(data, dict) and "recipe" in data:
-        data = data["recipe"]
-    recipe = Recipe.model_validate(data)
+    recipe = Recipe.from_dict(data)
     validate_graph(recipe)
     return recipe
 

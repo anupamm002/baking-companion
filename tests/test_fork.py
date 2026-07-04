@@ -2,7 +2,7 @@ from baking_companion.models import Recipe
 
 
 def _divide_recipe():
-    return Recipe.model_validate({
+    return Recipe.from_dict({
         "id": "div", "name": "Divide",
         "nodes": [{"id": "mix"}, {"id": "divide"},
                   {"id": "loaf_bake"}, {"id": "foc_bake"}],

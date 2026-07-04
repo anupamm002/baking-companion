@@ -11,7 +11,7 @@ def test_valid(recipe):
 
 
 def test_cycle_rejected():
-    r = Recipe.model_validate({
+    r = Recipe.from_dict({
         "id": "c", "name": "c", "nodes": [{"id": "a"}, {"id": "b"}],
         "edges": [{"from": "START", "to": "a"}, {"from": "a", "to": "b"},
                   {"from": "b", "to": "a"}, {"from": "b", "to": "END"}]})
@@ -20,7 +20,7 @@ def test_cycle_rejected():
 
 
 def test_unknown_node_rejected():
-    r = Recipe.model_validate({
+    r = Recipe.from_dict({
         "id": "c", "name": "c", "nodes": [{"id": "a"}],
         "edges": [{"from": "START", "to": "a"}, {"from": "a", "to": "ghost"}]})
     with pytest.raises(ValueError):

@@ -47,7 +47,7 @@ class Engine:
     def create_bake(self, recipe: Recipe, name=None,
                     anchor_kind="start_now", anchor_time=None):
         bake_id = new_bake_id(recipe.id)
-        snapshot = json.dumps(recipe.model_dump(mode="json", by_alias=True))
+        snapshot = json.dumps(recipe.to_dict())
         self.store.insert_bake(
             bake_id, recipe.id, recipe.version, name or recipe.name, "active",
             anchor_kind, anchor_time or now_iso(), now_iso(), snapshot)
@@ -62,7 +62,7 @@ class Engine:
         return bake_id
 
     def recipe_of(self, bake) -> Recipe:
-        return Recipe.model_validate(json.loads(bake["recipe_snapshot"]))
+        return Recipe.from_dict(json.loads(bake["recipe_snapshot"]))
 
     def _recompute_ready(self, bake_id, recipe):
         _, pred = build_adjacency(recipe)

@@ -10,7 +10,9 @@ Voice + phone (Termux + local web UI) come in later phases.
 
 ## Requirements
 
-Python ≥ 3.10, `pydantic>=2`, `pyyaml>=6`. Data lives in `~/.baking_companion/`
+Python ≥ 3.10 and **`pyyaml`** — that's the only third-party dependency (the schema is
+stdlib `dataclasses`, the LLM client is `urllib`, the web server is `http.server`), so it
+installs on a phone without compiling anything. Data lives in `~/.baking_companion/`
 (override with `BAKING_HOME`).
 
 ## Run
