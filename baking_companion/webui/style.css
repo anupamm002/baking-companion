@@ -22,11 +22,19 @@ button.cam, button.snap { background:var(--card); color:var(--fg); }
 .gallery { display:flex; flex-wrap:wrap; gap:6px; margin:8px 0; }
 .gallery h2 { width:100%; font-size:.9rem; margin:6px 0 2px; color:var(--muted); }
 .thumbwrap { position:relative; display:inline-block; line-height:0; }
-.gallery .thumb { width:88px; height:88px; object-fit:cover;
-               border-radius:8px; border:1px solid #0003; background:#000; }
+.thumb { width:80px; height:80px; object-fit:cover; border-radius:8px;
+         border:1px solid #0003; background:#000; }
 .playbadge { position:absolute; inset:0; display:flex; align-items:center;
-             justify-content:center; color:#fff; font-size:1.4rem;
+             justify-content:center; color:#fff; font-size:1.3rem;
              text-shadow:0 0 6px #000; pointer-events:none; }
+.stepmedia { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
+.delmedia { position:absolute; top:-6px; right:-6px; width:20px; height:20px;
+            padding:0; line-height:1; border-radius:50%; background:#d9533d;
+            color:#fff; font-size:.7rem; }
+.mediacount { color:var(--muted); font-size:.78rem; }
+.timer { font-variant-numeric:tabular-nums; color:var(--active); font-size:.85rem; }
+.timer.soon { color:#e8a13d; }
+.timer.done { color:#d9533d; font-weight:600; }
 .steps { list-style:none; padding:0; margin:8px 0; }
 .steps li { background:var(--card); border-radius:10px; padding:10px 12px;
             margin:6px 0; display:block; border-left:4px solid transparent; }

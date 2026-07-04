@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import tempfile
+from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -22,7 +23,7 @@ from . import importer, library, llm
 from .duration import format_duration
 from .engine import Engine
 from .router import Router
-from .scheduler import compute_schedule
+from .scheduler import compute_schedule, expected_duration
 from .store import Store
 
 WEBDIR = Path(__file__).resolve().parent / "webui"
@@ -43,10 +44,22 @@ def state_payload(store, engine, bake_id):
         dt = sched["finish"].get(nid)
         return dt.strftime("%H:%M") if dt else None
 
+    def ends_at(n):
+        st = smap.get(n.id) or {}
+        if st.get("status") == "active" and st.get("started_at"):
+            dur = expected_duration(n, st)
+            if dur.total_seconds() > 0:
+                try:
+                    return (datetime.fromisoformat(st["started_at"]) + dur).isoformat()
+                except ValueError:
+                    return None
+        return None
+
     nodes = [{
         "id": n.id, "title": n.title, "type": n.type,
         "status": (smap.get(n.id) or {}).get("status", "blocked"),
         "says": n.says, "readiness": n.readiness_hint, "finish": hm(n.id),
+        "ends_at": ends_at(n),
         "description": n.description, "temperature": n.temperature,
         "duration": (format_duration(n.duration.typical)
                      if n.duration and n.duration.typical else None),
@@ -157,7 +170,7 @@ class Handler(BaseHTTPRequestHandler):
             if not bid:
                 return self._send([])
             items = self.store.get_media(bake_id=bid)
-            out = [{"node": m["node_id"],
+            out = [{"id": m["id"], "node": m["node_id"],
                     "url": f"/media/{bid}/{Path(m['path']).name}",
                     "ts": m["ts"], "kind": m["kind"], "caption": m["caption"],
                     "tags": json.loads(m["tags"] or "[]")} for m in items]
@@ -179,6 +192,12 @@ class Handler(BaseHTTPRequestHandler):
         if parsed.path.startswith("/api/recipes/"):
             rid = parsed.path[len("/api/recipes/"):]
             return self._send({"ok": library.delete(self.store.home, rid)})
+        if parsed.path.startswith("/api/media/"):
+            try:
+                mid = int(parsed.path[len("/api/media/"):])
+            except ValueError:
+                return self._send({"ok": False}, 400)
+            return self._send({"ok": self.store.delete_media(mid)})
         self._send({"error": "not found"}, 404)
 
     def do_POST(self):

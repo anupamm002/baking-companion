@@ -139,6 +139,18 @@ class Store:
             (bake_id, node_id, path, kind, json.dumps(tags), caption,
              now_iso(), elapsed_seconds))
 
+    def delete_media(self, media_id):
+        row = self.db.execute(
+            "SELECT * FROM media WHERE id=?", (media_id,)).fetchone()
+        if not row:
+            return False
+        try:
+            Path(row["path"]).unlink(missing_ok=True)
+        except OSError:
+            pass
+        self._write("DELETE FROM media WHERE id=?", (media_id,))
+        return True
+
     def get_media(self, bake_id=None, node_id=None, recipe_id=None):
         """Query media; recipe_id joins across bakes on the stable (recipe, node) key."""
         clauses, vals = [], []
