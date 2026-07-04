@@ -46,22 +46,50 @@ $("addBtn").onclick = () => {
 $("addCancel").onclick = loadLibrary;
 $("reviewCancel").onclick = loadLibrary;
 
+// Downscale to <=1500px JPEG so phone photos become small, fast requests.
 function fileToB64(file) {
-  return new Promise((res) => {
-    const r = new FileReader();
-    r.onload = () => res({ mime: file.type, data: r.result.split(",")[1] });
-    r.readAsDataURL(file);
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const MAX = 1500;
+      let { width, height } = img;
+      if (width > MAX || height > MAX) {
+        const s = MAX / Math.max(width, height);
+        width = Math.round(width * s); height = Math.round(height * s);
+      }
+      const c = document.createElement("canvas");
+      c.width = width; c.height = height;
+      c.getContext("2d").drawImage(img, 0, 0, width, height);
+      resolve({ mime: "image/jpeg", data: c.toDataURL("image/jpeg", 0.85).split(",")[1] });
+    };
+    img.onerror = reject;
+    img.src = url;
   });
 }
 
 $("genBtn").onclick = async () => {
-  $("addStatus").textContent = "Thinking… (asking the AI to build your recipe)";
-  const images = await Promise.all([...$("inImages").files].map(fileToB64));
-  const r = await api("/api/recipes/import", "POST", {
-    url: $("inUrl").value.trim(), text: $("inText").value.trim(), images,
-  });
-  if (!r.ok) { $("addStatus").textContent = "Error: " + r.error; return; }
-  openReview(r.yaml, r.recipe, r.questions);
+  const n = $("inImages").files.length;
+  $("addStatus").textContent = "Thinking… building your recipe"
+    + (n ? " (reading " + n + " photo" + (n > 1 ? "s" : "") + ", ~10–30s)" : "") + "…";
+  try {
+    const images = await Promise.all([...$("inImages").files].map(fileToB64));
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 150000);
+    const r = await (await fetch("/api/recipes/import", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        url: $("inUrl").value.trim(), text: $("inText").value.trim(), images,
+      }), signal: ctrl.signal,
+    })).json();
+    clearTimeout(timer);
+    if (!r.ok) { $("addStatus").textContent = "Error: " + r.error; return; }
+    openReview(r.yaml, r.recipe, r.questions);
+  } catch (e) {
+    $("addStatus").textContent = "Timed out or failed: " + e
+      + ". Check the Termux window for errors, or try again.";
+  }
 };
 
 // ---- review / edit ----
