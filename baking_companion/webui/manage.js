@@ -1,9 +1,64 @@
 "use strict";
 const $ = (id) => document.getElementById(id);
 
+let currentId = null;
+
 function show(view) {
-  for (const v of ["library", "add", "review"]) $("view-" + v).hidden = (v !== view);
+  for (const v of ["library", "add", "review", "detail"])
+    $("view-" + v).hidden = (v !== view);
 }
+
+function fmtDur(secs) {
+  if (secs == null) return null;
+  secs = Math.round(secs);
+  const h = Math.floor(secs / 3600), m = Math.floor((secs % 3600) / 60);
+  return (h ? h + "h" : "") + (m ? m + "m" : "") || "0m";
+}
+
+function nodeDetailHtml(n) {
+  let h = "";
+  if (n.says) h += `<p class="says">🔊 ${n.says}</p>`;
+  if (n.description) h += `<p>${n.description}</p>`;
+  if (n.ingredients && n.ingredients.length)
+    h += "<ul class='ing'>" + n.ingredients.map((i) =>
+      `<li>${i.qty != null ? i.qty + (i.unit || "") + " — " : ""}${i.name}</li>`).join("") + "</ul>";
+  const meta = [];
+  if (n.temperature) meta.push("🌡 " + n.temperature);
+  const dur = n.duration && fmtDur(n.duration.typical);
+  if (dur) meta.push("⏱ ~" + dur);
+  if (n.readiness_hint) meta.push("✓ ready when " + n.readiness_hint);
+  if (meta.length) h += `<p class="meta">${meta.join(" · ")}</p>`;
+  if (n.references && n.references.length)
+    h += n.references.map((r) =>
+      `<a class="ref" href="${r.url || r.path || "#"}" target="_blank">▶ ${r.caption || r.type}`
+      + `${r.t_start ? " @" + r.t_start : ""}</a>`).join("");
+  return h || "<p class='muted'>No extra details.</p>";
+}
+
+async function openView(id) {
+  currentId = id;
+  const r = await api("/api/recipes/" + encodeURIComponent(id));
+  const rec = r.recipe;
+  $("detailName").textContent = rec ? rec.name : id;
+  $("detailMeta").textContent = rec
+    ? `v${rec.version} · ${rec.nodes.length} steps`
+      + (rec.equipment && rec.equipment.length ? " · " + rec.equipment.join(", ") : "")
+    : "(could not parse)";
+  const ol = $("detailSteps"); ol.innerHTML = "";
+  for (const n of (rec ? rec.nodes : [])) {
+    const li = document.createElement("li");
+    li.innerHTML = `<div class="steprow"><span class="chev">▸</span>`
+      + `<span class="title">${n.title || n.id}</span></div>`
+      + `<div class="detail" hidden>${nodeDetailHtml(n)}</div>`;
+    const detail = li.querySelector(".detail"), chev = li.querySelector(".chev");
+    const toggle = () => { detail.hidden = !detail.hidden; chev.textContent = detail.hidden ? "▸" : "▾"; };
+    li.querySelector(".title").onclick = toggle; chev.onclick = toggle;
+    ol.appendChild(li);
+  }
+  show("detail");
+}
+$("detailBack").onclick = loadLibrary;
+$("detailEdit").onclick = () => openRecipe(currentId);
 
 async function api(path, method, body) {
   const opt = { method: method || "GET" };
@@ -20,6 +75,9 @@ async function loadLibrary() {
     const li = document.createElement("li");
     const meta = r.error ? "<em>(invalid)</em>" : `· ${r.nodes} steps · v${r.version}`;
     li.innerHTML = `<span class="title">${r.name} ${meta}</span>`;
+    const view = document.createElement("button");
+    view.className = "tap"; view.textContent = "view";
+    view.onclick = () => openView(r.id);
     const edit = document.createElement("button");
     edit.className = "tap"; edit.textContent = "edit";
     edit.onclick = () => openRecipe(r.id);
@@ -31,7 +89,7 @@ async function loadLibrary() {
         loadLibrary();
       }
     };
-    li.append(edit, del);
+    li.append(view, edit, del);
     ol.appendChild(li);
   }
   show("library");

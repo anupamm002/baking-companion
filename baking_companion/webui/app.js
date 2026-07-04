@@ -17,10 +17,11 @@ async function loadMedia() {
   const g = $("gallery");
   if (!items.length) { g.innerHTML = ""; return; }
   g.innerHTML = "<h2>Captures</h2>" + items.slice().reverse().map((m) =>
-    m.kind === "video"
-      ? `<video src="${m.url}" class="thumb" muted playsinline controls preload="metadata"></video>`
-      : `<a href="${m.url}" target="_blank"><img src="${m.url}" loading="lazy"`
-        + ` alt="${m.node || ""}" title="${m.node || ""} · ${m.ts || ""}"></a>`).join("");
+    `<a href="${m.url}" target="_blank" class="thumbwrap">`
+    + (m.kind === "video"
+        ? `<video src="${m.url}" class="thumb" muted playsinline preload="metadata"></video><span class="playbadge">▶</span>`
+        : `<img src="${m.url}" class="thumb" loading="lazy" alt="${m.node || ""}">`)
+    + `</a>`).join("");
 }
 
 // ---- state rendering ----
@@ -28,6 +29,34 @@ async function refresh() {
   const s = await (await fetch("/api/state")).json();
   render(s);
   loadMedia();
+}
+
+function stepButtons(n) {
+  if (n.status === "done" || n.status === "skipped")
+    return `<button class="tap" data-cmd="reopen" data-node="${n.id}">undo</button>`;
+  let b = "";
+  if (n.status !== "active")
+    b += `<button class="tap" data-cmd="begin" data-node="${n.id}">start</button>`;
+  return b + `<button class="tap" data-cmd="done" data-node="${n.id}">done</button>`;
+}
+
+function stepDetail(n) {
+  let h = "";
+  if (n.says) h += `<p class="says">🔊 ${n.says}</p>`;
+  if (n.description) h += `<p>${n.description}</p>`;
+  if (n.ingredients && n.ingredients.length)
+    h += "<ul class='ing'>" + n.ingredients.map((i) =>
+      `<li>${i.qty != null ? i.qty + (i.unit || "") + " — " : ""}${i.name}</li>`).join("") + "</ul>";
+  const meta = [];
+  if (n.temperature) meta.push("🌡 " + n.temperature);
+  if (n.duration) meta.push("⏱ ~" + n.duration);
+  if (n.readiness) meta.push("✓ ready when " + n.readiness);
+  if (meta.length) h += `<p class="meta">${meta.join(" · ")}</p>`;
+  if (n.references && n.references.length)
+    h += n.references.map((r) =>
+      `<a class="ref" href="${r.url || r.path || "#"}" target="_blank">▶ ${r.caption || r.type}`
+      + `${r.t_start ? " @" + r.t_start : ""}</a>`).join("");
+  return h || "<p class='muted'>No extra details.</p>";
 }
 
 function render(s) {
@@ -47,21 +76,27 @@ function render(s) {
   for (const n of s.nodes) {
     const li = document.createElement("li");
     li.className = n.status;
-    let btns = "";
-    if (n.status === "done" || n.status === "skipped") {
-      btns = `<button class="tap" data-cmd="reopen" data-node="${n.id}">undo</button>`;
-    } else {
-      if (n.status !== "active")
-        btns += `<button class="tap" data-cmd="begin" data-node="${n.id}">start</button>`;
-      btns += `<button class="tap" data-cmd="done" data-node="${n.id}">done</button>`;
-    }
-    li.innerHTML = `<span class="icon">${ICON[n.status] || "?"}</span>`
+    li.innerHTML =
+      `<div class="steprow">`
+      + `<span class="chev">▸</span>`
+      + `<span class="icon">${ICON[n.status] || "?"}</span>`
       + `<span class="title">${n.title || n.id}</span>`
-      + (n.finish ? `<span class="fin">~${n.finish}</span>` : "") + btns;
+      + (n.finish ? `<span class="fin">~${n.finish}</span>` : "")
+      + `<span class="stepbtns">${stepButtons(n)}</span>`
+      + `</div>`
+      + `<div class="detail" hidden>${stepDetail(n)}</div>`;
+    const detail = li.querySelector(".detail");
+    const chev = li.querySelector(".chev");
+    const toggle = () => {
+      detail.hidden = !detail.hidden;
+      chev.textContent = detail.hidden ? "▸" : "▾";
+    };
+    li.querySelector(".title").onclick = toggle;
+    chev.onclick = toggle;
+    li.querySelectorAll("button[data-cmd]").forEach((b) =>
+      b.onclick = (e) => { e.stopPropagation(); command(b.dataset.cmd, b.dataset.node); });
     ol.appendChild(li);
   }
-  ol.querySelectorAll("button[data-cmd]").forEach((b) =>
-    b.onclick = () => command(b.dataset.cmd, b.dataset.node));
 }
 
 // ---- commands / ask ----
@@ -84,7 +119,7 @@ async function ask(text) {
   if (r.action === "capture") openCamera();
 }
 
-// ---- speech input (Web Speech, continuous, auto-restart) ----
+// ---- speech input ----
 function initRecognition() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR) { $("assistant").textContent = "This browser has no Web Speech API — use Chrome."; return null; }
@@ -107,34 +142,56 @@ $("micBtn").onclick = () => {
   else recog.stop();
 };
 
-// ---- camera / photo / video ----
+// ---- camera / photo / video (fresh stream each open; preview always live) ----
 let stream = null, recorder = null, chunks = [];
+
+function stopStream() {
+  if (stream) { stream.getTracks().forEach((t) => t.stop()); stream = null; }
+}
+
 async function openCamera() {
-  $("camWrap").hidden = false;
-  $("snapBtn").hidden = false;
-  $("recBtn").hidden = false;
-  if (!stream) {
-    try {
-      stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "environment", width: { ideal: 1920 } }, audio: true,
-      });
-      $("video").srcObject = stream;
-    } catch (e) { $("assistant").textContent = "Camera error: " + e; }
+  stopStream();                                  // avoid stale/frozen streams
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 } },
+      audio: true,
+    });
+  } catch (e) {
+    $("camWrap").hidden = false; $("camStatus").textContent = "Camera error: " + e;
+    return;
   }
+  const v = $("video");
+  v.srcObject = stream;
+  await v.play().catch(() => {});
+  $("camWrap").hidden = false;
+  $("camBtn").hidden = true;
+  $("camStatus").textContent = "";
+}
+function closeCamera() {
+  if (recorder && recorder.state === "recording") recorder.stop();
+  stopStream();
+  $("camWrap").hidden = true;
+  $("camBtn").hidden = false;
 }
 $("camBtn").onclick = openCamera;
+$("closeCamBtn").onclick = closeCamera;
 
-$("snapBtn").onclick = async () => {
-  const v = $("video"), c = $("canvas");
-  c.width = v.videoWidth; c.height = v.videoHeight;
-  c.getContext("2d").drawImage(v, 0, 0);
-  const blob = await new Promise((res) => c.toBlob(res, "image/jpeg", 0.9));
+async function uploadCapture(blob, type) {
   const node = frontier[0] || "";
   await fetch("/api/capture?node=" + encodeURIComponent(node), {
-    method: "POST", headers: { "Content-Type": "image/jpeg" }, body: blob,
+    method: "POST", headers: { "Content-Type": type }, body: blob,
   });
-  $("assistant").textContent = "Captured a photo for " + (node || "the bake") + ".";
-  speak("Got it."); loadMedia();
+}
+
+$("snapBtn").onclick = async () => {
+  const v = $("video");
+  if (!v.videoWidth) { $("camStatus").textContent = "Camera not ready yet…"; return; }
+  const c = $("canvas");
+  c.width = v.videoWidth; c.height = v.videoHeight;
+  c.getContext("2d").drawImage(v, 0, 0);
+  const blob = await new Promise((res) => c.toBlob(res, "image/jpeg", 0.92));
+  await uploadCapture(blob, "image/jpeg");
+  $("camStatus").textContent = "📸 Photo saved."; loadMedia();
 };
 
 function pickMime() {
@@ -142,27 +199,23 @@ function pickMime() {
     if (window.MediaRecorder && MediaRecorder.isTypeSupported(m)) return m;
   return "";
 }
-$("recBtn").onclick = async () => {
-  if (!stream) await openCamera();
+$("recBtn").onclick = () => {
   if (recorder && recorder.state === "recording") { recorder.stop(); return; }
+  if (!stream) { $("camStatus").textContent = "Open the camera first."; return; }
   chunks = [];
   recorder = new MediaRecorder(stream, pickMime() ? { mimeType: pickMime() } : undefined);
   recorder.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
   recorder.onstop = async () => {
     const type = recorder.mimeType || "video/webm";
-    const blob = new Blob(chunks, { type });
-    const node = frontier[0] || "";
-    $("assistant").textContent = "Uploading video…";
-    await fetch("/api/capture?node=" + encodeURIComponent(node), {
-      method: "POST", headers: { "Content-Type": type }, body: blob,
-    });
-    $("assistant").textContent = "Saved a video for " + (node || "the bake") + ".";
+    $("camStatus").textContent = "Uploading video…";
+    await uploadCapture(new Blob(chunks, { type }), type);
+    $("camStatus").textContent = "🎥 Video saved.";
     $("recBtn").textContent = "🎥 Record"; $("recBtn").classList.remove("on");
     loadMedia();
   };
   recorder.start();
-  $("recBtn").textContent = "⏹ Stop recording"; $("recBtn").classList.add("on");
-  speak("Recording.");
+  $("recBtn").textContent = "⏹ Stop"; $("recBtn").classList.add("on");
+  $("camStatus").textContent = "● Recording…";
 };
 
 refresh();

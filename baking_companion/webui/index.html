@@ -18,12 +18,16 @@
   <div class="controls">
     <button id="micBtn" class="mic">🎙️ Start listening</button>
     <button id="camBtn" class="cam">📷 Camera</button>
-    <button id="snapBtn" class="snap" hidden>Capture</button>
-    <button id="recBtn" class="cam" hidden>🎥 Record</button>
   </div>
 
   <div id="camWrap" class="camwrap" hidden>
     <video id="video" autoplay playsinline muted></video>
+    <div class="controls">
+      <button id="snapBtn">📸 Photo</button>
+      <button id="recBtn">🎥 Record</button>
+      <button id="closeCamBtn" class="cam">✕ Close</button>
+    </div>
+    <div id="camStatus" class="heard"></div>
     <canvas id="canvas" hidden></canvas>
   </div>
 

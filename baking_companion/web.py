@@ -19,6 +19,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from . import importer, library, llm
+from .duration import format_duration
 from .engine import Engine
 from .router import Router
 from .scheduler import compute_schedule
@@ -46,6 +47,14 @@ def state_payload(store, engine, bake_id):
         "id": n.id, "title": n.title, "type": n.type,
         "status": (smap.get(n.id) or {}).get("status", "blocked"),
         "says": n.says, "readiness": n.readiness_hint, "finish": hm(n.id),
+        "description": n.description, "temperature": n.temperature,
+        "duration": (format_duration(n.duration.typical)
+                     if n.duration and n.duration.typical else None),
+        "ingredients": [{"name": i.name, "qty": i.qty, "unit": i.unit}
+                        for i in n.ingredients],
+        "references": [{"type": r.type, "url": r.url, "path": r.path,
+                        "t_start": r.t_start, "caption": r.caption}
+                       for r in n.references],
     } for n in recipe.nodes]
     end = sched["finish"].get("END")
     return {
