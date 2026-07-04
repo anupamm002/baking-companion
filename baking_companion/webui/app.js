@@ -11,10 +11,21 @@ function speak(text) {
   speechSynthesis.cancel(); speechSynthesis.speak(u);
 }
 
+// ---- captures gallery ----
+async function loadMedia() {
+  const items = await (await fetch("/api/media")).json();
+  const g = $("gallery");
+  if (!items.length) { g.innerHTML = ""; return; }
+  g.innerHTML = "<h2>Captures</h2>" + items.slice().reverse().map((m) =>
+    `<a href="${m.url}" target="_blank"><img src="${m.url}" loading="lazy"`
+    + ` alt="${m.node || ""}" title="${m.node || ""} · ${m.ts || ""}"></a>`).join("");
+}
+
 // ---- state rendering ----
 async function refresh() {
   const s = await (await fetch("/api/state")).json();
   render(s);
+  loadMedia();
 }
 function render(s) {
   $("bakeName").textContent = s.bake.name;
@@ -103,6 +114,7 @@ $("snapBtn").onclick = async () => {
   });
   $("assistant").textContent = "Captured a photo for " + (node || "the bake") + ".";
   speak("Got it.");
+  loadMedia();
 };
 
 refresh();

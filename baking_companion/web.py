@@ -93,6 +93,23 @@ class Handler(BaseHTTPRequestHandler):
             return self._serve_file(WEBDIR / name, ctype)
         if parsed.path == "/api/state":
             return self._send(state_payload(self.store, self.engine, self.bake_id))
+        if parsed.path == "/api/media":
+            items = self.store.get_media(bake_id=self.bake_id)
+            out = [{"node": m["node_id"],
+                    "url": f"/media/{self.bake_id}/{Path(m['path']).name}",
+                    "ts": m["ts"], "kind": m["kind"], "caption": m["caption"],
+                    "tags": json.loads(m["tags"] or "[]")} for m in items]
+            return self._send(out)
+        if parsed.path.startswith("/media/"):
+            parts = parsed.path[len("/media/"):].split("/")
+            if len(parts) != 2 or "." == parts[1] or "/" in parts[1] or ".." in parts[1]:
+                return self._send({"error": "bad path"}, 400)
+            fpath = self.store.media_dir(parts[0]) / parts[1]
+            ext = fpath.suffix.lower()
+            ctype = ({".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png",
+                      ".webm": "video/webm", ".mp4": "video/mp4"}
+                     .get(ext, "application/octet-stream"))
+            return self._serve_file(fpath, ctype)
         self._send({"error": "not found"}, 404)
 
     def do_POST(self):
