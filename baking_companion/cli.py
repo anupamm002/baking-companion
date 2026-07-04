@@ -238,7 +238,7 @@ class App:
 
 
 def build_parser():
-    p = argparse.ArgumentParser(prog="bc", description="Baking companion")
+    p = argparse.ArgumentParser(prog="bake", description="Baking companion")
     sub = p.add_subparsers(dest="cmd", required=True)
 
     s = sub.add_parser("start"); s.add_argument("recipe"); s.add_argument("--name")
