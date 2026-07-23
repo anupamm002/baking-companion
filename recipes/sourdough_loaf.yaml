@@ -1,0 +1,172 @@
+# Sourdough Loaf (plain) — the cheddar-jalapeño loaf without the inclusions.
+# Same process as the cheddar-jalapeño sourdough; the cheddar cubes + diced pickled
+# jalapeños would be laminated in during the folds. This base recipe leaves them out.
+# For the loaded version, add ~120 g sharp cheddar + ~60 g jalapeño at fold 2 (lamination).
+
+recipe:
+  id: sourdough_loaf
+  version: 1
+  name: Sourdough Loaf
+  yield: "1 loaf (~900 g)"
+  equipment: ["1 kg round banneton", "Dutch oven", "lame/razor", "kitchen scale"]
+
+  scaling: { mode: bakers_percent, anchor: flour }   # total flour = 100%
+
+  nodes:
+    - id: feed_levain
+      type: subrecipe
+      title: Feed the levain
+      description: Mix starter, flour and water; let it ripen until peaked and bubbly.
+      ingredients:
+        - { name: mature starter, qty: 20, unit: g, role: leaven }
+        - { name: bread flour,    qty: 50, unit: g, role: flour }
+        - { name: water (28 °C),  qty: 50, unit: g, role: water }
+      duration: { min: 6h, typical: 7h, max: 9h }
+      readiness_hint: "doubled, domed, bubbly; passes the float test"
+      capture: { prompt_photo: true, tags: [levain, ripe] }
+      says: "Feed the levain — 20 g starter, 50 g flour, 50 g water. I'll track ripeness."
+
+    - id: autolyse
+      type: mix
+      title: Autolyse
+      description: Combine the bread flour and most of the water to a shaggy mass; rest, no salt yet.
+      ingredients:
+        - { name: bread flour,   qty: 500, unit: g, role: flour }
+        - { name: water (32 °C), qty: 350, unit: g, role: water }   # 25 g reserved for mix
+      duration: { min: 30m, typical: 45m, max: 1h }
+      says: "Autolyse: mix the flour with 350 g water until no dry bits. Rest."
+
+    - id: mix
+      type: mix
+      title: Add levain + salt
+      description: Add ripe levain, salt and the reserved water; pinch and fold until smooth.
+      ingredients:
+        - { name: ripe levain,     qty: 100, unit: g, role: leaven }   # from feed_levain
+        - { name: salt,            qty: 10,  unit: g, role: salt }
+        - { name: water (reserve), qty: 25,  unit: g, role: water }
+      duration: { min: 8m, typical: 12m, max: 20m }
+      capture: { prompt_photo: true, tags: [dough, mixed] }
+      says: "Add the levain, salt and reserved water. Pinch and fold until incorporated."
+
+    - id: fold_1
+      type: action
+      title: Stretch & fold 1 of 3
+      description: First set of stretch-and-folds, then rest.
+      duration: { min: 30m, typical: 40m, max: 50m }
+      readiness_hint: "dough loosening, starting to smooth out"
+      capture: { prompt_photo: true, tags: [bulk, fold-1] }
+      says: "Fold 1 — stretch and fold all four sides, then rest about 40 minutes."
+
+    - id: fold_2
+      type: action
+      title: Stretch & fold 2 of 3
+      description: >-
+        Second set of folds. In the cheddar-jalapeño version, laminate in the
+        cheddar and jalapeño here; plain loaf just folds.
+      duration: { min: 30m, typical: 40m, max: 50m }
+      capture: { prompt_photo: true, tags: [bulk, fold-2] }
+      says: "Fold 2 — stretch and fold, then rest."
+
+    - id: fold_3
+      type: action
+      title: Stretch & fold 3 of 3
+      description: Final, gentler set of folds before the dough rests for the rise.
+      duration: { min: 30m, typical: 45m, max: 1h }
+      capture: { prompt_photo: true, tags: [bulk, fold-3] }
+      says: "Fold 3 — the last one. Then let bulk finish."
+
+    - id: bulk_finish
+      type: wait
+      title: Finish bulk fermentation
+      description: Rest undisturbed until the dough is puffy, domed and jiggly.
+      duration: { min: 1h30m, typical: 2h30m, max: 4h }
+      readiness_hint: "~50% risen, domed, jiggly, bubbles at the edges"
+      capture: { prompt_photo: true, tags: [bulk, end] }
+      says: "Let bulk finish. I'll nudge you around 2.5 hours — but judge by the dough."
+
+    - id: preshape
+      type: action
+      title: Pre-shape + bench rest
+      description: Turn out, pre-shape into a loose round; bench rest uncovered.
+      duration: { min: 20m, typical: 25m, max: 40m }
+      says: "Pre-shape into a loose round. Bench rest about 25 minutes."
+
+    - id: final_shape
+      type: action
+      title: Final shape into banneton
+      description: Shape with tension; seam-up into the floured banneton.
+      duration: { min: 5m, typical: 10m, max: 15m }
+      capture: { prompt_photo: true, tags: [shaped, banneton] }
+      says: "Final shape, seam up into the banneton."
+
+    - id: cold_retard
+      type: wait
+      title: Cold retard (fridge)
+      description: Cover and refrigerate overnight to develop flavour and firm up.
+      duration: { min: 12h, typical: 14h, max: 16h }
+      capture: { prompt_photo: false }
+      says: "Into the fridge, covered. Overnight cold proof."
+
+    - id: preheat
+      type: bake
+      title: Preheat oven + Dutch oven
+      description: Preheat with the Dutch oven inside so it's screaming hot.
+      temperature: 250C
+      duration: { min: 45m, typical: 50m, max: 1h }
+      says: "Start the oven at 250 with the Dutch oven inside."
+
+    - id: pull_and_score
+      type: action
+      title: Turn out + score
+      description: Turn the cold dough onto parchment, dust, and score with the lame.
+      duration: { min: 5m, typical: 8m, max: 12m }
+      capture: { prompt_photo: true, tags: [scored, pre-bake] }
+      says: "Turn out onto parchment and score. Bake straight from the fridge."
+
+    - id: bake_lid_on
+      type: bake
+      title: Bake — lid on
+      description: Lower dough into the hot Dutch oven, lid on, for steam.
+      temperature: 250C
+      duration: { min: 20m, typical: 20m, max: 22m }
+      says: "Lid on, 250, 20 minutes."
+
+    - id: bake_lid_off
+      type: bake
+      title: Bake — lid off
+      description: Remove lid, drop temp, bake to a deep crust.
+      temperature: 230C
+      duration: { min: 20m, typical: 22m, max: 28m }
+      readiness_hint: "deep brown, hollow when tapped, internal ~99 °C"
+      capture: { prompt_photo: true, tags: [baked, crust] }
+      says: "Lid off, 230, until deep brown."
+
+    - id: cool
+      type: wait
+      title: Cool on rack
+      description: Cool completely before cutting — the crumb is still setting.
+      duration: { min: 1h, typical: 1h30m, max: 2h }
+      capture: { prompt_photo: true, tags: [crumb, final] }
+      says: "Onto a rack. Don't cut for at least an hour."
+
+  edges:
+    - { from: START,        to: feed_levain }
+    - { from: START,        to: autolyse }
+    - { from: feed_levain,  to: mix }
+    - { from: autolyse,     to: mix }
+    - { from: mix,          to: fold_1 }
+    - { from: fold_1,       to: fold_2 }
+    - { from: fold_2,       to: fold_3 }
+    - { from: fold_3,       to: bulk_finish }
+    - { from: bulk_finish,  to: preshape }
+    - { from: preshape,     to: final_shape }
+    - { from: final_shape,  to: cold_retard }
+    - { from: START,        to: preheat }
+    - { from: cold_retard,  to: pull_and_score }
+    - { from: preheat,        to: bake_lid_on,
+        constraint: { kind: finish_by, target: bake_lid_on } }
+    - { from: pull_and_score, to: bake_lid_on,
+        constraint: { kind: start_before, target: bake_lid_on, lead: 10m } }
+    - { from: bake_lid_on,  to: bake_lid_off }
+    - { from: bake_lid_off, to: cool }
+    - { from: cool,         to: END }

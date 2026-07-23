@@ -1,0 +1,79 @@
+# Sourdough Starter Build (1:6:6) — a ~2.5-day room-temperature build that wakes a
+# fridge starter and strengthens it, finishing with a 1:1:1 feed that peaks in ~3–4 h.
+# That final ripe starter is the levain used in the Sourdough Loaf recipe. Kept as a
+# SEPARATE recipe for now (run it, then start the loaf from its peaked starter).
+#
+# 1:6:6 = starter : flour : water by weight. Discard down to the seed each feed.
+# Everything stays at room temperature (~24 °C) throughout.
+
+recipe:
+  id: starter_build
+  version: 1
+  name: Sourdough Starter Build (1:6:6)
+  yield: "~100 g ripe levain"
+  equipment: ["kitchen scale", "jar", "rubber band or marker for the rise line"]
+
+  nodes:
+    - id: day1_night_feed
+      type: subrecipe
+      title: Day 1 (night) — first feed 1:6:6
+      description: >-
+        Take 5 g starter straight from the fridge and feed it 1:6:6. Mix well,
+        mark the level, and leave at room temperature overnight.
+      ingredients:
+        - { name: fridge starter, qty: 5,  unit: g, role: leaven }
+        - { name: flour,          qty: 30, unit: g, role: flour }
+        - { name: water (room),   qty: 30, unit: g, role: water }
+      duration: { min: 8h, typical: 12h, max: 14h }
+      readiness_hint: "risen and bubbly by morning (1:6:6 is slow — full peak not required)"
+      capture: { prompt_photo: true, tags: [starter, day1] }
+      says: "First feed: 5 g fridge starter, 30 g flour, 30 g water. Room temp overnight."
+
+    - id: day2_morning_feed
+      type: subrecipe
+      title: Day 2 (morning) — feed 1:6:6
+      description: Discard down to ~5 g and feed 1:6:6 again. Keep at room temperature.
+      ingredients:
+        - { name: starter (kept), qty: 5,  unit: g, role: leaven }
+        - { name: flour,          qty: 30, unit: g, role: flour }
+        - { name: water (room),   qty: 30, unit: g, role: water }
+      duration: { min: 8h, typical: 11h, max: 13h }
+      readiness_hint: "risen and bubbly, smells tangy and fresh"
+      capture: { prompt_photo: true, tags: [starter, day2am] }
+      says: "Day 2 morning: keep 5 g, feed 30 g flour and 30 g water. Room temp."
+
+    - id: day2_night_feed
+      type: subrecipe
+      title: Day 2 (night) — feed 1:6:6
+      description: Discard down to ~5 g and feed 1:6:6 once more. Room temperature overnight.
+      ingredients:
+        - { name: starter (kept), qty: 5,  unit: g, role: leaven }
+        - { name: flour,          qty: 30, unit: g, role: flour }
+        - { name: water (room),   qty: 30, unit: g, role: water }
+      duration: { min: 8h, typical: 12h, max: 14h }
+      readiness_hint: "lively and predictable by morning — ready to build for the bake"
+      capture: { prompt_photo: true, tags: [starter, day2pm] }
+      says: "Day 2 night: keep 5 g, feed 30 g flour and 30 g water. Room temp overnight."
+
+    - id: day3_morning_feed
+      type: subrecipe
+      title: Day 3 (morning) — build 1:1:1 for the bake
+      description: >-
+        Final build. Feed 1:1:1 at the quantity your recipe needs (e.g. 40 g starter +
+        40 g flour + 40 g water for ~100 g levain) and let it rise to peak. This peaked
+        starter is the levain for the Sourdough Loaf.
+      ingredients:
+        - { name: starter (kept), qty: 40, unit: g, role: leaven }
+        - { name: flour,          qty: 40, unit: g, role: flour }
+        - { name: water (room),   qty: 40, unit: g, role: water }
+      duration: { min: 3h, typical: 3h30m, max: 5h }
+      readiness_hint: "peaked and domed, ~doubled, bubbly; passes the float test"
+      capture: { prompt_photo: true, tags: [starter, ripe, levain] }
+      says: "Final 1:1:1 build. Feed to the quantity you need and let it peak — about 3 to 4 hours."
+
+  edges:
+    - { from: START,             to: day1_night_feed }
+    - { from: day1_night_feed,   to: day2_morning_feed }
+    - { from: day2_morning_feed, to: day2_night_feed }
+    - { from: day2_night_feed,   to: day3_morning_feed }
+    - { from: day3_morning_feed, to: END }
