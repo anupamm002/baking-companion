@@ -138,12 +138,10 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         parsed = urlparse(self.path)
-        if parsed.path == "/":
+        # Single-page app: /, /bakes, /recipes all serve the shell; the tab bar
+        # and initial-screen-from-path logic live in app.js.
+        if parsed.path in ("/", "/bakes", "/recipes"):
             return self._serve_file(WEBDIR / "index.html", "text/html")
-        if parsed.path == "/recipes":
-            return self._serve_file(WEBDIR / "manage.html", "text/html")
-        if parsed.path == "/bakes":
-            return self._serve_file(WEBDIR / "bakes.html", "text/html")
         if parsed.path == "/api/bakes":
             return self._send(bakes_list(self.store))
         if parsed.path == "/api/recipes":
